@@ -1,15 +1,15 @@
 const fetch = require( 'node-fetch');
 const jsdom = require('jsdom');
 const fs = require('fs');
+const eventEmitter = require('events');
+const path = require('path');
 
 function split(str, index) {
     return [str.slice(0, index), str.slice(index)];
 }
 
 const fn = function collectData(houses) {
-    const housesArray = {
-        data: []
-    };
+    const housesJson = {};
 
     return new Promise(resolve => setTimeout(() => {
         const houseHtml = new jsdom.JSDOM(houses.innerHTML);
@@ -22,14 +22,14 @@ const fn = function collectData(houses) {
             [housePrice, additionalHtml] = split(priceNotFormatted, priceNotFormatted.search('zł') + 2);
         }
         if (housePrice !== undefined) {
-            housesArray.data.push({
+            Object.assign(housesJson, {
                 'houseName': houseHtml.window.document.getElementsByClassName("css-16v5mdi")[0].innerHTML,
                 'price': housePrice,
                 'surface': houseHtml.window.document.getElementsByClassName("css-643j0o")[0].textContent,
                 'houseLink': houseHtml.window.document.getElementsByClassName("css-rc5s2u")[0].href,
             });
         }
-        resolve(housesArray);
+        resolve(housesJson);
     }, 100));
 };
 
@@ -51,17 +51,65 @@ exports.fetchHousesData = (housesUrl) => {
             const actions = houses.map(fn); // run the function over all items
             const results = Promise.all(actions);
             results.then(data => {
+                const filtered =  data.filter(function(e) {
+                    return e.houseName || e.price || e.surface || e.houseLink;
+                });
                 if (fs.existsSync(filePath)) {
-                    fs.appendFile(filePath, JSON.stringify(data), function (err) {
+                    const fileData = fs.readFileSync(path.join(filePath));
+                    const freshContent = JSON.parse(fileData.toString()).concat(JSON.parse(JSON.stringify(filtered)));
+                    fs.writeFile(filePath, JSON.stringify(freshContent),function (err) {
                         if (err) throw err;
                         console.log('File updated!');
                     });
                 } else {
-                    fs.writeFile(filePath, JSON.stringify(data),function (err) {
+                    fs.writeFile(filePath, JSON.stringify(filtered),function (err) {
                         if (err) throw err;
                         console.log('New file created!');
                     });
                 }
             });
         });
+}
+
+exports.showDifferences = () => {
+    const jsonFiles = [];
+    class MyEventEmitter extends eventEmitter {
+        houses = {};
+        files = [];
+    }
+    const eventEmitterModel = new MyEventEmitter();
+
+    eventEmitterModel.once('readFiles', function (jsonFiles) {
+        console.log('read files event');
+        this.files = fs.readdirSync('./storage').filter(file => path.extname(file) === '.json');
+        // jsonFiles = fs.readdirSync('./storage').filter(file => path.extname(file) === '.json');
+        console.log('after push');
+    });
+
+    eventEmitterModel.on('collectData', function (file) {
+        console.log(file);
+        const fileData = fs.readFileSync(path.join('./storage', file));
+        const json = JSON.parse(fileData.toString());
+        // console.log(json.length);
+        Object.assign(this.houses, json);
+        console.log(this.houses);
+        console.log(321);
+    });
+
+    eventEmitterModel.once('compareData', function () {
+        console.log('compare event');
+    });
+    eventEmitterModel.once('showDifferences', function () {
+        console.log('show differences event');
+    });
+
+    // Emit all events
+    eventEmitterModel.emit('readFiles', jsonFiles);
+    eventEmitterModel.files.forEach(file => {
+        eventEmitterModel.emit('collectData', file);
+    });
+    eventEmitterModel.emit('compareData');
+    eventEmitterModel.emit('showDifferences');
+    // console.log(eventEmitterModel.houses)
+    console.log('complete');
 }
