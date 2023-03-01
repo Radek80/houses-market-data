@@ -74,7 +74,7 @@ exports.fetchHousesData = (housesUrl) => {
 exports.showDifferences = () => {
     const jsonFiles = [];
     class MyEventEmitter extends eventEmitter {
-        houses = {};
+        historicPrices = [];
         files = [];
     }
     const eventEmitterModel = new MyEventEmitter();
@@ -87,13 +87,27 @@ exports.showDifferences = () => {
     });
 
     eventEmitterModel.on('collectData', function (file) {
-        console.log(file);
-        const fileData = fs.readFileSync(path.join('./storage', file));
-        const json = JSON.parse(fileData.toString());
-        // console.log(json.length);
-        Object.assign(this.houses, json);
-        console.log(this.houses);
-        console.log(321);
+        const fileData = fs.readFileSync(path.join('./storage', file)).toString();
+        const json = JSON.parse(fileData);
+        let currentFileDate = file.replace(".json", "");
+
+        json.forEach(element => {
+            let priceRow = [];
+            let houseName = element.houseName;
+            let housePrice = element.price;
+            if (this.historicPrices[houseName]) {
+                Object.keys(this.historicPrices[houseName]).forEach(date => {
+                    if (housePrice !== this.historicPrices[houseName][date]
+                        && !this.historicPrices[houseName].hasOwnProperty(currentFileDate)) {
+                        // priceRow[currentFileDate] = housePrice;
+                        this.historicPrices[houseName][currentFileDate] = housePrice;
+                    }
+                });
+            } else {
+                priceRow[currentFileDate] = housePrice;
+                this.historicPrices[houseName] = priceRow;
+            }
+        })
     });
 
     eventEmitterModel.once('compareData', function () {
@@ -108,8 +122,8 @@ exports.showDifferences = () => {
     eventEmitterModel.files.forEach(file => {
         eventEmitterModel.emit('collectData', file);
     });
+    console.log(eventEmitterModel.historicPrices);
     eventEmitterModel.emit('compareData');
     eventEmitterModel.emit('showDifferences');
-    // console.log(eventEmitterModel.houses)
     console.log('complete');
 }
