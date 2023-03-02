@@ -122,8 +122,9 @@ exports.showDifferences = () => {
     eventEmitterModel.files.forEach(file => {
         eventEmitterModel.emit('collectData', file);
     });
-    console.log(eventEmitterModel.historicPrices);
     eventEmitterModel.emit('compareData');
     eventEmitterModel.emit('showDifferences');
+    console.log(eventEmitterModel.historicPrices);
     console.log('complete');
+    return eventEmitterModel.historicPrices;
 }
